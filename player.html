@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimeStream - Player</title>
+    <style>body{margin:0;background:black;height:100vh;overflow:hidden;}iframe{width:100%;height:100%;border:none;}</style>
+</head>
+<body>
+<iframe id="videoFrame" allowfullscreen></iframe>
+<script>
+    const STORAGE_KEY = 'anime_custom_sources';
+    const urlParams = new URLSearchParams(window.location.search);
+    const tmdbId = urlParams.get('id');
+    const type = urlParams.get('type');
+    const season = urlParams.get('season');
+    const episode = urlParams.get('ep');
+    
+    function getCustomVideoUrl() {
+        let sources = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        let customSource = null;
+        if (type === 'movie') {
+            customSource = sources.find(s => s.tmdb_id == tmdbId && s.type === 'movie');
+        } else {
+            customSource = sources.find(s => s.tmdb_id == tmdbId && s.type === 'tv' && s.season == season && s.episode == episode);
+        }
+        return customSource ? customSource.video_url : null;
+    }
+
+    let videoUrl = getCustomVideoUrl();
+    if (!videoUrl) {
+        // 🔁 Fallback: Kuch source nhi mila, to screenscape use karega
+        if (type === 'movie') {
+            videoUrl = `https://screenscape.me/embed?tmdb=${tmdbId}&type=movie&lan=hin`;
+        } else {
+            videoUrl = `https://screenscape.me/embed?tmdb=${tmdbId}&type=tv&s=${season}&e=${episode}&lan=hin`;
+        }
+    }
+    document.getElementById('videoFrame').src = videoUrl;
+</script>
+// Firebase config (copy same as above)
+const firebaseConfig = { ... };
+
+// Initialize Firebase
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+async function getCustomVideo(tmdbId, type, season, episode) {
+    const q = query(collection(db, "custom_sources"),
+        where("tmdb_id", "==", tmdbId),
+        where("type", "==", type),
+        where("season", "==", season),
+        where("episode", "==", episode)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) return snap.docs[0].data().video_url;
+    return null;
+}
+
+// In your main load function:
+const customUrl = await getCustomVideo(tmdbId, type, season, episode);
+if (customUrl) {
+    document.getElementById('videoFrame').src = customUrl;
+} else {
+    // fallback to screenscape
+    let fallbackUrl = `https://screenscape.me/embed?tmdb=${tmdbId}&type=${type}&s=${season}&e=${episode}&lan=hin`;
+    document.getElementById('videoFrame').src = fallbackUrl;
+}
+</body>
+</html>

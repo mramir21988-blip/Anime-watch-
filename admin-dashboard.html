@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{background:#0A0A0F;color:white;font-family:system-ui;padding:20px;}
+        .container{max-width:700px;margin:0 auto;}
+        h1{color:#8B5CF6;margin-bottom:20px;}
+        .card{background:#1a1a22;border-radius:16px;padding:20px;margin-bottom:20px;}
+        input,select,button{width:100%;padding:12px;margin:8px 0;background:#0A0A0F;border:1px solid #333;border-radius:12px;color:white;}
+        button{background:#8B5CF6;font-weight:bold;cursor:pointer;}
+        .source-item{background:#0A0A0F;padding:12px;margin:8px 0;border-radius:12px;display:flex;justify-content:space-between;}
+        .success{color:#4ade80;}
+        .error{color:#f87171;}
+        .logout-btn{background:#333;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⚙️ Admin Dashboard</h1>
+    <div class="card">
+        <h2>➕ Add / Update Source</h2>
+        <form id="sourceForm">
+            <input type="number" id="tmdb_id" placeholder="TMDB ID (e.g., 44073)" required>
+            <select id="type">
+                <option value="tv">TV Series</option>
+                <option value="movie">Movie</option>
+            </select>
+            <input type="number" id="season" placeholder="Season (for TV)" value="1">
+            <input type="number" id="episode" placeholder="Episode (for TV)" value="1">
+            <input type="text" id="video_url" placeholder="Video URL (screenscape or direct)" required>
+            <select id="language">
+                <option value="hindi">Hindi</option>
+                <option value="english">English</option>
+            </select>
+            <button type="submit">💾 Save Source</button>
+            <div id="formMsg"></div>
+        </form>
+    </div>
+    <div class="card">
+        <h2>📋 Existing Sources</h2>
+        <div id="sourcesList">Loading...</div>
+    </div>
+    <button id="logoutBtn" class="logout-btn">🚪 Logout</button>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // 🔁 YAHAN APNI FIREBASE CONFIG COPY KAR
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Check if user is logged in, else redirect to login
+    onAuthStateChanged(auth, (user) => {
+        if (!user) window.location.href = 'admin-login.html';
+    });
+
+    async function loadSources() {
+        const querySnapshot = await getDocs(collection(db, "custom_sources"));
+        let html = '';
+        querySnapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            html += `
+                <div class="source-item">
+                    <div>
+                        <strong>${data.title || 'Untitled'}</strong><br>
+                        TMDB:${data.tmdb_id} | ${data.type} | ${data.type==='tv' ? `S${data.season} E${data.episode}` : 'Movie'}
+                    </div>
+                    <button class="delete-source" data-id="${docSnap.id}">Delete</button>
+                </div>
+            `;
+        });
+        document.getElementById('sourcesList').innerHTML = html || '<p>No custom sources yet.</p>';
+        document.querySelectorAll('.delete-source').forEach(btn => {
+            btn.onclick = async () => {
+                await deleteDoc(doc(db, "custom_sources", btn.dataset.id));
+                loadSources();
+            };
+        });
+    }
+
+    document.getElementById('sourceForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const tmdb_id = document.getElementById('tmdb_id').value;
+        const type = document.getElementById('type').value;
+        const season = document.getElementById('season').value;
+        const episode = document.getElementById('episode').value;
+        const video_url = document.getElementById('video_url').value;
+        const language = document.getElementById('language').value;
+        const title = type==='tv' ? `TMDB${tmdb_id} S${season}` : `TMDB${tmdb_id} Movie`;
+
+        const docId = `${tmdb_id}_${type}_${season}_${episode}`;
+        await setDoc(doc(db, "custom_sources", docId), {
+            tmdb_id, type, season, episode, video_url, language, title,
+            updatedAt: new Date().toISOString()
+        });
+        document.getElementById('formMsg').innerHTML = '<span class="success">✅ Source saved! It will appear in app instantly.</span>';
+        document.getElementById('sourceForm').reset();
+        loadSources();
+        setTimeout(() => document.getElementById('formMsg').innerHTML = '', 3000);
+    };
+
+    document.getElementById('logoutBtn').onclick = async () => {
+        await signOut(auth);
+        window.location.href = 'admin-login.html';
+    };
+
+    loadSources();
+</script>
+</body>
+</html>
